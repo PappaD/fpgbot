@@ -8,9 +8,9 @@ import logging
 import time
 from signal import signal, SIGINT, SIGTERM, SIGABRT
 import settings
-from peewee import *
 from datetime import datetime
 import urllib2, json
+import store
 
 
 # Enable logging
@@ -19,37 +19,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-
-db = SqliteDatabase('users.db')
-
 jobs = {}
-
-class BaseModel(Model):
-    class Meta:
-        database = db
-        
-class User(BaseModel):
-    id = IntegerField(primary_key=True)
-    latitude = FloatField()
-    longitude = FloatField()
-    active = BooleanField()
-    lastupdated = DateTimeField(null = True)
-    
-class UserPokemons(BaseModel):
-    user = ForeignKeyField(User)
-    pokemon = CharField()
-    
-    
-class UserEncounter(BaseModel):
-    user = ForeignKeyField(User)
-    encounter = CharField()
-    expires = DateTimeField()
-
-db.connect()
-
-for tbl in [User, UserPokemons, UserEncounter]:
-    if not tbl.table_exists():
-        db.create_tables([tbl])
 
 def start(bot, update):
     update.message.reply_text('Hello and welcome to the Pokemon Go bot. Send me your location to start!')
@@ -77,7 +47,7 @@ def echo(bot, update):
 
 def job_callback(bot, job):
 
-    user = User.select().where(User.id == job.context).order_by(User.lastupdated).get()
+    user = store.get_user(job.context)
         
     if user.lastupdated is None or (datetime.now() - user.lastupdated).total_seconds() > settings.periodicity:
         url = settings.api
@@ -112,7 +82,7 @@ def job_callback(bot, job):
                 vanishes = datetime.fromtimestamp(float(pokemon['expiration_timestamp_ms']) / 1e3)
                 vanishesText = vanishes.strftime("%H:%M:%S")
                 
-                ue, created = UserEncounter.get_or_create(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
+                ue, created = store.userencounters_get_or_create(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
                 ue.save()
                 
                 if created:
@@ -121,11 +91,8 @@ def job_callback(bot, job):
                     logger.info("Got already handled pokemon: " + settings.pokemons[pokemon['pokemon_id']])
                 
                 if created:
-                    try:
-                        up = UserPokemons.get(UserPokemons.user == user, UserPokemons.pokemon == pokemon['pokemon_id'])
-                    except UserPokemons.DoesNotExist:
-                        # its not in our blacklist, signal the user!
-                        
+                    if store.check_user_pokemon_whitelist(user, pokemon['pokemon_id']):
+                        # its in our whitelist, signal the user!
                         msg = "Saw " + settings.pokemons[pokemon['pokemon_id']] + ", vanishes " + vanishesText
                         logger.info(msg)
                         latitude = pokemon['latitude']
@@ -138,9 +105,6 @@ def job_callback(bot, job):
             user.save()
         else:
             logger.info("Neither error nor result in response..?")
-
-
-
     
 def location(bot, update, job_queue):
     message = update.message
@@ -149,7 +113,7 @@ def location(bot, update, job_queue):
     
     logger.info("Got location " + str(location.latitude) + " " + str(location.longitude) + " for user " + str(chat.id))
  
-    u, created = User.get_or_create(id=chat.id, defaults={'latitude': location.latitude, 'longitude': location.longitude, 'active': True, 'lastupdated': datetime.now() })
+    u, created = store.user_get_or_create(id=chat.id, defaults={'latitude': location.latitude, 'longitude': location.longitude, 'active': True, 'lastupdated': datetime.now() })
     u.latitude = location.latitude
     u.longitude = location.longitude
     u.active = True
@@ -184,15 +148,14 @@ def ignorelist(bot, update):
     chat = message.chat
     update.message.reply_text("Listing pokemons on ignorelist")
 
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
     
     il = []
     
-    ups = UserPokemons.select().join(User).where(User.id == chat.id)
+    ups = store.get_user_pokemons(chat.id)
     for up in ups:
         il.append(settings.pokemons[up.pokemon])
         
@@ -204,14 +167,13 @@ def watchlist(bot, update):
     chat = message.chat
     update.message.reply_text("Listing pokemons on watchlist")
     
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
         
         
-    ups = UserPokemons.select().where(UserPokemons.user == u)
+    ups = store.get_user_pokemons(chat.id)
     
     wl = []
     
@@ -245,9 +207,8 @@ def ignore(bot, update, args):
         update.message.reply_text("Usage: /ignore <pokemon>, i.e. /ignore pidgey")
         return
 
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
 
@@ -255,7 +216,7 @@ def ignore(bot, update, args):
     
     p = get_pokemon_by_name(pokemon_to_find)
     if p:
-        up, created = UserPokemons.get_or_create(user = u, pokemon = p)
+        up, created = store.userpokemons_get_or_create(u, p)
         rows = up.save()
         update.message.reply_text("Ignoring " + settings.pokemons[p])
     else:
@@ -270,9 +231,8 @@ def watch(bot, update, args):
         update.message.reply_text("Usage: /watch <pokemon>, i.e. /watch pidgey")
         return
 
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
         
@@ -280,9 +240,7 @@ def watch(bot, update, args):
     
     p = get_pokemon_by_name(pokemon_to_find)
     if p:
-        query = UserPokemons.delete().where(UserPokemons.user == u, UserPokemons.pokemon == p)
-        rows = query.execute() 
-
+        rows = store.userpokemons_delete(u, p)
         update.message.reply_text("Added " + settings.pokemons[p] + " to watchlist")
     else:
         update.message.reply_text("Could not find any pokemon named " + message.text)
@@ -294,9 +252,8 @@ def status(bot, update):
     message = update.message
     chat = message.chat
     
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
         
@@ -313,9 +270,8 @@ def stop(bot, update, job_queue):
     message = update.message
     chat = message.chat
     
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
     
@@ -324,8 +280,6 @@ def stop(bot, update, job_queue):
     
     if rows == 1:
         update.message.reply_text("You are deactivated")
-    else:
-        logger.warn("Saved something else than one row: " + str(rows))
         
     if u.id in jobs:
         jobs[u.id].schedule_removal()
@@ -347,11 +301,10 @@ def catchable(bot, update):
 
 def set_default(u):
     # delete all in ignorelist
-    query = UserPokemons.delete().where(UserPokemons.user == u)
-    rows = query.execute() 
+    store.userpokemons_delete_all(u)
     
     for p in settings.ignore_default:
-        up, created = UserPokemons.get_or_create(user = u, pokemon = p)
+        up, created = store.userpokemons_get_or_create(u,p)
         up.save()
     
 def default(bot, update):
@@ -361,9 +314,8 @@ def default(bot, update):
     message = update.message
     chat = message.chat
     
-    try:
-        u = User.get(User.id == chat.id)
-    except User.DoesNotExist:
+    u = store.get_user(chat.id)
+    if u is None:
         update.message.reply_text("Please start by setting your location")
         return
 
@@ -371,12 +323,9 @@ def default(bot, update):
         
         
 def gc_callback(bot, job):
-    c = UserEncounter.select().where(UserEncounter.expires < datetime.now()).count()
-    t = UserEncounter.select().count()
+    c, t = store.garbage_collect()
     logger.info("Garbage collecting " + str(c) + " of total " + str(t) + " rows in UserEncounter")
-    
-    query = UserEncounter.delete().where(UserEncounter.expires < datetime.now())
-    c = query.execute()
+
 
                 
 def main():
@@ -410,7 +359,7 @@ def main():
     updater.start_polling()
 
     
-    users = User.select().where(User.active == True)
+    users = store.get_all_users()
     
     for user in users:
         logger.info("Activating job for user " + str(user.id))
