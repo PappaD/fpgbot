@@ -47,8 +47,9 @@ class UserEncounter(BaseModel):
 
 db.connect()
 
-#db.create_tables([User, UserPokemons, UserEncounter])
-
+for tbl in [User, UserPokemons, UserEncounter]:
+    if not tbl.table_exists():
+        db.create_tables([tbl])
 
 def start(bot, update):
     update.message.reply_text('Hello and welcome to the Pokemon Go bot. Send me your location to start!')
