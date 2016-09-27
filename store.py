@@ -1,7 +1,11 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+
 from peewee import *
+from datetime import datetime
 
 db = SqliteDatabase('users.db')
-
 
 class BaseModel(Model):
     class Meta:
@@ -41,7 +45,7 @@ def get_user(id):
     user = User.select().where(User.id == id).get()
     return user            
 
-def user_get_or_create(id, defaults):
+def get_or_create_user(id, defaults):
     u, created = User.get_or_create(id=id, defaults=defaults)
     u.save()
 
@@ -50,17 +54,17 @@ def user_get_or_create(id, defaults):
 def get_user_pokemons(id):
     return UserPokemons.select().join(User).where(User.id == id)    
 
-def userpokemons_get_or_create(user, pokemon):
+def get_or_create_userpokemons(user, pokemon):
     up, created = UserPokemons.get_or_create(user = user, pokemon = pokemon) 
     up.save()
 
     return up, created
 
-def userpokemons_delete(user, pokemon):
+def delete_userpokemons(user, pokemon):
     query = UserPokemons.delete().where(UserPokemons.user == user, UserPokemons.pokemon == pokemon)
     return query.execute()         
 
-def userpokemons_delete_all(user):
+def delete_all_userpokemons(user):
     query = UserPokemons.delete().where(UserPokemons.user == user)
     return query.execute()   
 
@@ -75,7 +79,7 @@ def garbage_collect():
 def get_all_users():
     return User.select().where(User.active == True)     
 
-def userencounters_get_or_create(user, encounter, expires):
+def get_or_create_userencounters(user, encounter, expires):
     ue, created = UserEncounter.get_or_create(user = user, encounter = encounter, expires = expires)    
     ue.save()
 

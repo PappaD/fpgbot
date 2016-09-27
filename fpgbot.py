@@ -82,7 +82,7 @@ def job_callback(bot, job):
                 vanishes = datetime.fromtimestamp(float(pokemon['expiration_timestamp_ms']) / 1e3)
                 vanishesText = vanishes.strftime("%H:%M:%S")
                 
-                ue, created = store.userencounters_get_or_create(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
+                ue, created = store.get_or_create_userencounters(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
                 
                 if created:
                     logger.info("Saw new pokemon: " + settings.pokemons[pokemon['pokemon_id']])
@@ -112,9 +112,7 @@ def location(bot, update, job_queue):
     
     logger.info("Got location " + str(location.latitude) + " " + str(location.longitude) + " for user " + str(chat.id))
  
-    u, created = store.user_get_or_create(id=chat.id, defaults={'latitude': location.latitude, 'longitude': location.longitude, 'active': True, 'lastupdated': datetime.now() })
-
-    
+    u, created = store.get_or_create_user(id=chat.id, defaults={'latitude': location.latitude, 'longitude': location.longitude, 'active': True, 'lastupdated': datetime.now() })
 
     if created:
         update.message.reply_text("Welcome new user, stored your location")
@@ -211,7 +209,7 @@ def ignore(bot, update, args):
     
     p = get_pokemon_by_name(pokemon_to_find)
     if p:
-        up, created = store.userpokemons_get_or_create(u, p)
+        up, created = store.get_or_create_userpokemons(u, p)
         update.message.reply_text("Ignoring " + settings.pokemons[p])
     else:
         update.message.reply_text("Could not find any pokemon named " + pokemon_to_find)
@@ -234,7 +232,7 @@ def watch(bot, update, args):
     
     p = get_pokemon_by_name(pokemon_to_find)
     if p:
-        rows = store.userpokemons_delete(u, p)
+        rows = store.delete_userpokemons(u, p)
         update.message.reply_text("Added " + settings.pokemons[p] + " to watchlist")
     else:
         update.message.reply_text("Could not find any pokemon named " + message.text)
@@ -295,11 +293,10 @@ def catchable(bot, update):
 
 def set_default(u):
     # delete all in ignorelist
-    store.userpokemons_delete_all(u)
+    store.delete_all_userpokemons(u)
     
     for p in settings.ignore_default:
-        up, created = store.userpokemons_get_or_create(u,p)
-        up.save()
+        up, created = store.get_or_create_userpokemons(u,p)
     
 def default(bot, update):
     logger.info("default")
@@ -320,8 +317,6 @@ def gc_callback(bot, job):
     c, t = store.garbage_collect()
     logger.info("Garbage collecting " + str(c) + " of total " + str(t) + " rows in UserEncounter")
 
-
-                
 def main():
     # Create the EventHandler and pass it your bot's token.
     updater = Updater(settings.token)
