@@ -227,6 +227,13 @@ def watchlist(bot, update):
         
     update.message.reply_text("\n".join(wl))
     
+def get_pokemon_by_name(pokemon_to_find):
+    for p in settings.pokemons:
+        if settings.pokemons[p].lower() == pokemon_to_find.lower():
+            return p
+
+    return None
+    
     
     
 def ignore(bot, update, args):
@@ -244,17 +251,15 @@ def ignore(bot, update, args):
         update.message.reply_text("Please start by setting your location")
         return
 
-    pokemonToFind = args[0]
+    pokemon_to_find = args[0]
     
-    for p in settings.pokemons:
-        if settings.pokemons[p].lower() == pokemonToFind.lower():
-        
-            up, created = UserPokemons.get_or_create(user = u, pokemon = p)
-            rows = up.save()
-            update.message.reply_text("Ignoring " + settings.pokemons[p])
-            return
-    
-    update.message.reply_text("Could not find any pokemon named " + pokemonToFind)
+    p = get_pokemon_by_name(pokemon_to_find)
+    if p:
+        up, created = UserPokemons.get_or_create(user = u, pokemon = p)
+        rows = up.save()
+        update.message.reply_text("Ignoring " + settings.pokemons[p])
+    else:
+        update.message.reply_text("Could not find any pokemon named " + pokemon_to_find)
     
 def watch(bot, update, args):
     logger.info("watch")
@@ -271,18 +276,16 @@ def watch(bot, update, args):
         update.message.reply_text("Please start by setting your location")
         return
         
-    pokemonToFind = args[0]
+    pokemon_to_find = args[0]
     
-    for p in settings.pokemons:
-        if settings.pokemons[p].lower() == pokemonToFind.lower():
-            query = UserPokemons.delete().where(UserPokemons.user == u, UserPokemons.pokemon == p)
-            rows = query.execute() 
+    p = get_pokemon_by_name(pokemon_to_find)
+    if p:
+        query = UserPokemons.delete().where(UserPokemons.user == u, UserPokemons.pokemon == p)
+        rows = query.execute() 
 
-            update.message.reply_text("Added " + settings.pokemons[p] + " to watchlist")
-            return
-    
-    update.message.reply_text("Could not find any pokemon named " + message.text)
-    
+        update.message.reply_text("Added " + settings.pokemons[p] + " to watchlist")
+    else:
+        update.message.reply_text("Could not find any pokemon named " + message.text)
     
 
 
@@ -424,17 +427,7 @@ def main():
     # updater.idle()
     
     updater.idle()
-    
-    
-    # stop_signals=(SIGINT, SIGTERM, SIGABRT)
-    # for sig in stop_signals:
-        # signal(sig, updater.signal_handler)
-        
-    # updater.is_idle = True
-    
-    # while updater.is_idle:
-        # time.sleep(1)
-        
+       
 
 if __name__ == '__main__':
     main()
