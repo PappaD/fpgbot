@@ -83,7 +83,6 @@ def job_callback(bot, job):
                 vanishesText = vanishes.strftime("%H:%M:%S")
                 
                 ue, created = store.userencounters_get_or_create(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
-                ue.save()
                 
                 if created:
                     logger.info("Saw new pokemon: " + settings.pokemons[pokemon['pokemon_id']])
@@ -114,20 +113,18 @@ def location(bot, update, job_queue):
     logger.info("Got location " + str(location.latitude) + " " + str(location.longitude) + " for user " + str(chat.id))
  
     u, created = store.user_get_or_create(id=chat.id, defaults={'latitude': location.latitude, 'longitude': location.longitude, 'active': True, 'lastupdated': datetime.now() })
-    u.latitude = location.latitude
-    u.longitude = location.longitude
-    u.active = True
+
     
-    rows = u.save()
-    if rows == 1:
-        if created:
-            update.message.reply_text("Welcome new user, stored your location")
-            set_default(u)
-        else:
-            update.message.reply_text("Updated your location, activating tracking")
+
+    if created:
+        update.message.reply_text("Welcome new user, stored your location")
+        set_default(u)
     else:
-        logger.warn("Saved something else than one row: " + str(rows))
-        
+        update.message.reply_text("Updated your location, activating tracking")
+        u.latitude = location.latitude
+        u.longitude = location.longitude
+        u.active = True
+        u.save()
         
     if u.id in jobs:
         logger.info("Job already activated for user")
@@ -196,8 +193,6 @@ def get_pokemon_by_name(pokemon_to_find):
 
     return None
     
-    
-    
 def ignore(bot, update, args):
     logger.info("ignore")
     message = update.message
@@ -217,7 +212,6 @@ def ignore(bot, update, args):
     p = get_pokemon_by_name(pokemon_to_find)
     if p:
         up, created = store.userpokemons_get_or_create(u, p)
-        rows = up.save()
         update.message.reply_text("Ignoring " + settings.pokemons[p])
     else:
         update.message.reply_text("Could not find any pokemon named " + pokemon_to_find)

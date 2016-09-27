@@ -42,13 +42,19 @@ def get_user(id):
     return user            
 
 def user_get_or_create(id, defaults):
-    return User.get_or_create(id=id, defaults=defaults)
+    u, created = User.get_or_create(id=id, defaults=defaults)
+    u.save()
+
+    return u, created
 
 def get_user_pokemons(id):
     return UserPokemons.select().join(User).where(User.id == id)    
 
 def userpokemons_get_or_create(user, pokemon):
-    return UserPokemons.get_or_create(user = user, pokemon = pokemon) 
+    up, created = UserPokemons.get_or_create(user = user, pokemon = pokemon) 
+    up.save()
+
+    return up, created
 
 def userpokemons_delete(user, pokemon):
     query = UserPokemons.delete().where(UserPokemons.user == user, UserPokemons.pokemon == pokemon)
@@ -70,7 +76,10 @@ def get_all_users():
     return User.select().where(User.active == True)     
 
 def userencounters_get_or_create(user, encounter, expires):
-    return UserEncounter.get_or_create(user = user, encounter = encounter, expires = expires)    
+    ue, created = UserEncounter.get_or_create(user = user, encounter = encounter, expires = expires)    
+    ue.save()
+
+    return ue, created
 
 def check_user_pokemon_whitelist(user, pokemon):
     try:
@@ -78,3 +87,6 @@ def check_user_pokemon_whitelist(user, pokemon):
         return False
     except UserPokemons.DoesNotExist:
         return True
+
+def check_user_pokemon_blacklist(user, pokemon):
+    return not check_user_pokemon_whitelist(user, pokemon)
