@@ -67,7 +67,7 @@ def job_callback(bot, job):
             content = resp.read()
         except:
             logging.warn("Something bad happened")
-            content = ""
+            content = "{}"
 
         try:
             data = json.loads(content)
