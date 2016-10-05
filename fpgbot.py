@@ -70,7 +70,7 @@ def trigger_alert():
 
 @run_async
 def job_callback(bot, job):
-    worker_callback.run(host='127.0.0.1',port='12344')
+    worker_callback.run(host='0.0.0.0',port='12344')
 
 def start(bot, update):
     update.message.reply_text('Hello and welcome to the Pokemon Go bot. Send me your location to start!')
