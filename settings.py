@@ -1,6 +1,6 @@
 
 
-token = '283976312:AAHGptk9TtNh5kNud9iz3PBGAo-6GysFqEE' 
+token = '28xxxxx12:AAHxxxxxxxxxxxxxxxxxxxxqEE' 
 
 url = 'http://s64-1.dlab.nu:5000/next_loc?lat=%f&lon=%f'
 garbage_collect = 300
