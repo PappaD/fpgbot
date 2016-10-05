@@ -2,6 +2,7 @@
 
 token = '283976312:AAHGptk9TtNh5kNud9iz3PBGAo-6GysFqEE' 
 
+url = 'http://s64-1.dlab.nu:5000/next_loc?lat=%f&lon=%f'
 garbage_collect = 300
 
 pokemons = { 'BULBASAUR': 'Bulbasaur', 
