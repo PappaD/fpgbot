@@ -63,6 +63,8 @@ def trigger_alert():
                     bot.send_location(chat_id=user.id, latitude=pokemon_lat, longitude=pokemon_lng)
                 else:
                     logger.info("Got already handled pokemon: " + pokemon_name)
+            else:
+                logger.info("Got pokemon too far away or not on whitelist: %s (%d m)" % (pokemon_name, dist, ))
 
     return "OK"
 
