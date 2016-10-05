@@ -13,7 +13,6 @@ Lib/
 Scripts/
 tcl/
 pip-selfcheck.json
-settings.py
 users.db
 
 # Distribution / packaging

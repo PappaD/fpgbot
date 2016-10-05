@@ -11,15 +11,64 @@ import settings
 from datetime import datetime
 import urllib2, json
 import store
+from geopy.distance import vincenty
 
+from flask import Flask, request, abort
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+worker_callback = Flask(__name__)
+updater = None
 
-jobs = {}
+@worker_callback.route('/',methods=['POST'])
+def trigger_alert():
+    global updater
+
+    logger.debug("POST request received from %s." % (request.remote_addr))
+    data = json.loads(request.data)
+    if data['type'] == 'pokemon':
+        pokemon_lat = data['message']['latitude']
+        pokemon_lng = data['message']['longitude']
+        pokemon_id = data['message']['pokemon_id']
+        pokemon_encounter = data['message']['encounter_id']
+        pokemon_disappear_time = data['message']['disappear_time']
+        pokemon = settings.pokemon_id[pokemon_id]
+        pokemon_name = settings.pokemons[pokemon]
+
+        pokemon_vanishes = datetime.fromtimestamp(float(pokemon_disappear_time))
+        pokemon_vanishesText = pokemon_vanishes.strftime("%H:%M:%S")
+
+        users = store.get_active_users()
+        for user in users:
+            user_pos = (user.latitude, user.longitude)
+            pokemon_pos = (pokemon_lat, pokemon_lng)
+            dist = vincenty(user_pos, pokemon_pos).meters
+
+            distance_check = dist < user.normal_distance
+            whitelist_check = store.check_user_pokemon_whitelist(user, pokemon)
+
+            if distance_check and whitelist_check:
+                ue, created = store.get_or_create_userencounters(user = user, encounter = pokemon_encounter, expires = pokemon_vanishes)
+                
+                if created:
+                    logger.info("Got new pokemon to report: %s with distance of %d" % (pokemon_name, dist, ))
+                    msg = "Saw " + pokemon_name + ", vanishes " + pokemon_vanishesText
+                    logger.info(msg)
+
+                    bot = updater.bot
+                    bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
+                    bot.send_location(chat_id=user.id, latitude=pokemon_lat, longitude=pokemon_lng)
+                else:
+                    logger.info("Got already handled pokemon: " + pokemon_name)
+
+    return "OK"
+
+@run_async
+def job_callback(bot, job):
+    worker_callback.run(host='127.0.0.1',port='12344')
 
 def start(bot, update):
     update.message.reply_text('Hello and welcome to the Pokemon Go bot. Send me your location to start!')
@@ -43,69 +92,8 @@ def help(bot, update):
 def echo(bot, update):
     logger.info(update.message.text)
     update.message.reply_text("Sorry, I dont understand you. Send me /help for a list of commands.")
-
-
-def job_callback(bot, job):
-
-    user = store.get_user(job.context)
-        
-    if user.lastupdated is None or (datetime.now() - user.lastupdated).total_seconds() > settings.periodicity:
-        url = settings.api
-        url = url.replace("LAT", str(user.latitude))
-        url = url.replace("LNG", str(user.longitude))
-
-        req = urllib2.Request(url)
-        req.add_header('Accept', 'application/json, text/javascript, */*; q=0.01') 
-        req.add_header('Connection', 'keep-alive') 
-        req.add_header('Origin', 'https://fastpokemap.se')  
-        #req.add_header('Accept-Encoding', 'gzip, deflate, sdch, br')  
-        req.add_header('Accept-Language', 'sv-SE,sv;q=0.8,en-US;q=0.6,en;q=0.4')  
-        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36')  
-        
-        try:
-            resp = urllib2.urlopen(req)
-            content = resp.read()
-        except:
-            logging.warn("Something bad happened")
-            content = "{}"
-
-        try:
-            data = json.loads(content)
-        except ValueError:
-            logger.info("No data recieved")
-            
-        if 'error' in data.keys():
-            logger.info("Time to get pokemon status for user " + str(user.id) + " - Server overloaded, retrying in one second")
-        elif 'result' in data.keys():
-            logger.info("Time to get pokemon status for user " + str(user.id) + " - Fetched new pokemons")
-            for pokemon in data['result']:
-                vanishes = datetime.fromtimestamp(float(pokemon['expiration_timestamp_ms']) / 1e3)
-                vanishesText = vanishes.strftime("%H:%M:%S")
-                
-                ue, created = store.get_or_create_userencounters(user = user, encounter = pokemon['encounter_id'], expires = vanishes)
-                
-                if created:
-                    logger.info("Saw new pokemon: " + settings.pokemons[pokemon['pokemon_id']])
-                else:
-                    logger.info("Got already handled pokemon: " + settings.pokemons[pokemon['pokemon_id']])
-                
-                if created:
-                    if store.check_user_pokemon_whitelist(user, pokemon['pokemon_id']):
-                        # its in our whitelist, signal the user!
-                        msg = "Saw " + settings.pokemons[pokemon['pokemon_id']] + ", vanishes " + vanishesText
-                        logger.info(msg)
-                        latitude = pokemon['latitude']
-                        longitude = pokemon['longitude']
-                        bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
-                        bot.send_location(chat_id=user.id, latitude=latitude, longitude=longitude)
-                
-            logger.info("Done fetching pokemons")
-            user.lastupdated = datetime.now()
-            user.save()
-        else:
-            logger.info("Neither error nor result in response..?")
     
-def location(bot, update, job_queue):
+def location(bot, update):
     message = update.message
     location = message.location
     chat = message.chat
@@ -123,15 +111,6 @@ def location(bot, update, job_queue):
         u.longitude = location.longitude
         u.active = True
         u.save()
-        
-    if u.id in jobs:
-        logger.info("Job already activated for user")
-        return
-     
-    logger.info("Activating job for user")
-    job = Job(job_callback, 1, context=u.id)
-    jobs[u.id] = job
-    job_queue.put(job)
     
 
 def error(bot, update, error):
@@ -257,7 +236,7 @@ def status(bot, update):
     else:
         update.message.reply_text("You are inactive")
     
-def stop(bot, update, job_queue):
+def stop(bot, update):
     logger.info("stop")
     message = update.message
     chat = message.chat
@@ -272,15 +251,6 @@ def stop(bot, update, job_queue):
     
     if rows == 1:
         update.message.reply_text("You are deactivated")
-        
-    if u.id in jobs:
-        jobs[u.id].schedule_removal()
-        del jobs[u.id]
-        logger.info("Removing job")
-        return
-        
-    logger.info("No job to remove for user")
-
    
 def maxdistance(bot, update):
     logger.info("maxdistance")
@@ -318,6 +288,9 @@ def gc_callback(bot, job):
     logger.info("Garbage collecting " + str(c) + " of total " + str(t) + " rows in UserEncounter")
 
 def main():
+    global updater
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+
     # Create the EventHandler and pass it your bot's token.
     updater = Updater(settings.token)
 
@@ -327,7 +300,7 @@ def main():
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("stop", stop, pass_job_queue=True))
+    dp.add_handler(CommandHandler("stop", stop))
     dp.add_handler(CommandHandler("ignorelist", ignorelist))
     dp.add_handler(CommandHandler("watchlist", watchlist))
     dp.add_handler(CommandHandler(command="ignore", callback=ignore, pass_args=True))
@@ -338,7 +311,7 @@ def main():
     dp.add_handler(CommandHandler("default", default))
 
     dp.add_handler(MessageHandler([Filters.text], echo))
-    dp.add_handler(MessageHandler([Filters.location], location, pass_job_queue=True))
+    dp.add_handler(MessageHandler([Filters.location], location))
     dp.add_handler(MessageHandler([Filters.command], echo))
     
     # log all errors
@@ -350,20 +323,12 @@ def main():
     
     users = store.get_all_users()
     
-    for user in users:
-        logger.info("Activating job for user " + str(user.id))
-        job = Job(job_callback, 1, context=user.id)
-        jobs[user.id] = job
-        updater.job_queue.put(job)        
-    
     job = Job(gc_callback, settings.garbage_collect)
     updater.job_queue.put(job)   
-    
-    # Run the bot until the you presses Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    # updater.idle()
-    
+
+    job = Job(job_callback, 0, repeat=False)
+    updater.job_queue.put(job)   
+
     updater.idle()
        
 

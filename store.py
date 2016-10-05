@@ -16,6 +16,8 @@ class User(BaseModel):
     latitude = FloatField()
     longitude = FloatField()
     active = BooleanField()
+    normal_distance = IntegerField(default=200)
+    alert_distance = IntegerField(default=0)
     lastupdated = DateTimeField(null = True)
     
 class UserPokemons(BaseModel):
@@ -44,6 +46,10 @@ def user_exists(id):
 def get_user(id):
     user = User.select().where(User.id == id).get()
     return user            
+
+def get_active_users():
+    user = User.select().where(User.active == True)
+    return user 
 
 def get_or_create_user(id, defaults):
     u, created = User.get_or_create(id=id, defaults=defaults)
