@@ -1,6 +1,6 @@
 
 
-token = '283976312:AAHGptk9TtNh5kNud9iz3PBGAo-6GysFqEE' 
+token = '28xxxxx12:AAHxxxxxxxxxxxxxxxxxxxxqEE' 
 
 garbage_collect = 300
 
