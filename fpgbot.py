@@ -114,6 +114,21 @@ def location(bot, update):
         u.active = True
         u.save()
     
+    url = settings.url % (u.latitude,u.longitude,)
+    logging.info("Trying to set new location at %s" % url)
+    req = urllib2.Request(url, data="")
+    req.add_header('Accept-Encoding', 'gzip, deflate') 
+    req.add_header('Accept-Language', 'sv-SE,sv;q=0.8,en-US;q=0.6,en;q=0.4')
+    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36') 
+    req.add_header('Accept', '*/*') 
+    req.add_header('X-Requested-With', 'XMLHttpRequest') 
+    req.add_header('Connection', 'keep-alive') 
+    req.add_header('Content-Length', '0')     
+
+    resp = urllib2.urlopen(req)
+    content = resp.read()
+    logging.info("New position set")
+    
 
 def error(bot, update, error):
     logger.warn('Update "%s" caused error "%s"' % (update, error))
