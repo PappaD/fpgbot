@@ -22,6 +22,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 worker_callback = Flask(__name__)
 updater = None
+banned = False
 
 @worker_callback.route('/',methods=['POST'])
 def trigger_alert():
@@ -318,8 +319,20 @@ def default(bot, update):
         
         
 def gc_callback(bot, job):
+    global banned
     c, t = store.garbage_collect()
-    logger.info("Garbage collecting " + str(c) + " of total " + str(t) + " rows in UserEncounter")
+    logger.info("Garbage collecting " + str(c) + " of total " + str(t) + " rows in Encounter")
+    if t == 0:
+        if banned == False:
+            users = store.get_active_users()
+            for user in users:
+                msg = "No pokemons left, are the workers banned?"
+                bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
+            banned = True
+    else:
+        banned = False
+
+        
 
 def main():
     global updater
