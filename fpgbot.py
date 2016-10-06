@@ -269,9 +269,25 @@ def stop(bot, update):
     if rows == 1:
         update.message.reply_text("You are deactivated")
    
-def maxdistance(bot, update):
+def maxdistance(bot, update, args):
     logger.info("maxdistance")
-    update.message.reply_text("Not yet implemented")
+    message = update.message
+    chat = message.chat
+
+    u = store.get_user(chat.id)
+    if u is None:
+        update.message.reply_text("Please start by setting your location")
+        return
+
+    if len(args) != 1:
+        update.message.reply_text("Usage: /watch <pokemon>, i.e. /watch pidgey")
+        return
+
+    u.normal_distance = int(args[0])
+    rows = u.save()
+    
+    if rows == 1:
+        update.message.reply_text("maxdistance is set to %s" % args[0])
 
 def catchable(bot, update):
     logger.info("catchable")
@@ -322,7 +338,7 @@ def main():
     dp.add_handler(CommandHandler("watchlist", watchlist))
     dp.add_handler(CommandHandler(command="ignore", callback=ignore, pass_args=True))
     dp.add_handler(CommandHandler(command="watch", callback=watch, pass_args=True))
-    dp.add_handler(CommandHandler("maxdistance", maxdistance))
+    dp.add_handler(CommandHandler("maxdistance", maxdistance, pass_args=True))
     dp.add_handler(CommandHandler("catchable", catchable))
     dp.add_handler(CommandHandler("status", status))
     dp.add_handler(CommandHandler("default", default))
