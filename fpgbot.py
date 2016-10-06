@@ -41,6 +41,12 @@ def trigger_alert():
         pokemon_vanishes = datetime.fromtimestamp(float(pokemon_disappear_time))
         pokemon_vanishesText = pokemon_vanishes.strftime("%H:%M:%S")
 
+        _, created = store.get_or_create_encounters(encounter = pokemon_encounter, expires = pokemon_vanishes)
+
+        if not created:
+            logger.info("Got already handled pokemon: " + pokemon_name)
+            return "OK"
+
         users = store.get_active_users()
         for user in users:
             user_pos = (user.latitude, user.longitude)
@@ -51,18 +57,13 @@ def trigger_alert():
             whitelist_check = store.check_user_pokemon_whitelist(user, pokemon)
 
             if distance_check and whitelist_check:
-                ue, created = store.get_or_create_userencounters(user = user, encounter = pokemon_encounter, expires = pokemon_vanishes)
-                
-                if created:
-                    logger.info("Got new pokemon to report: %s with distance of %d" % (pokemon_name, dist, ))
-                    msg = "Saw " + pokemon_name + ", vanishes " + pokemon_vanishesText
-                    logger.info(msg)
+                logger.info("Got new pokemon to report: %s with distance of %d" % (pokemon_name, dist, ))
+                msg = "Saw " + pokemon_name + ", vanishes " + pokemon_vanishesText
+                logger.info(msg)
 
-                    bot = updater.bot
-                    bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
-                    bot.send_location(chat_id=user.id, latitude=pokemon_lat, longitude=pokemon_lng)
-                else:
-                    logger.info("Got already handled pokemon: " + pokemon_name)
+                bot = updater.bot
+                bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
+                bot.send_location(chat_id=user.id, latitude=pokemon_lat, longitude=pokemon_lng)
             else:
                 logger.info("Got pokemon too far away or not on whitelist: %s (%d m)" % (pokemon_name, dist, ))
 

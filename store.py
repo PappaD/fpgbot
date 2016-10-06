@@ -25,14 +25,13 @@ class UserPokemons(BaseModel):
     pokemon = CharField()
     
     
-class UserEncounter(BaseModel):
-    user = ForeignKeyField(User)
+class Encounter(BaseModel):
     encounter = CharField()
     expires = DateTimeField()
 
 db.connect()
 
-for tbl in [User, UserPokemons, UserEncounter]:
+for tbl in [User, UserPokemons, Encounter]:
     if not tbl.table_exists():
         db.create_tables([tbl])
 
@@ -75,18 +74,18 @@ def delete_all_userpokemons(user):
     return query.execute()   
 
 def garbage_collect():
-    c = UserEncounter.select().where(UserEncounter.expires < datetime.now()).count()
-    t = UserEncounter.select().count()
+    c = Encounter.select().where(Encounter.expires < datetime.now()).count()
+    t = Encounter.select().count()
 
-    query = UserEncounter.delete().where(UserEncounter.expires < datetime.now())
+    query = Encounter.delete().where(Encounter.expires < datetime.now())
     query.execute()
     return c, t           
 
 def get_all_users():
     return User.select().where(User.active == True)     
 
-def get_or_create_userencounters(user, encounter, expires):
-    ue, created = UserEncounter.get_or_create(user = user, encounter = encounter, expires = expires)    
+def get_or_create_encounters(encounter, expires):
+    ue, created = Encounter.get_or_create(encounter = encounter, expires = expires)    
     ue.save()
 
     return ue, created
