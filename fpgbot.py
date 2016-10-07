@@ -330,7 +330,12 @@ def gc_callback(bot, job):
                 bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
             banned = True
     else:
-        banned = False
+        if banned == True:
+            users = store.get_active_users()
+            for user in users:
+                msg = "Active again!"
+                bot.sendMessage(chat_id=user.id, parse_mode='Markdown', text=msg)
+            banned = False      
 
         
 
