@@ -115,6 +115,11 @@ def location(bot, update):
         u.longitude = location.longitude
         u.active = True
         u.save()
+
+    pos = open('pos', 'w')
+    pos.truncate()
+    pos.write(str(location.latitude) + "," + str(location.longitude))
+    pos.close()    
     
     url = settings.url % (u.latitude,u.longitude,)
     logging.info("Trying to set new location at %s" % url)
@@ -130,6 +135,8 @@ def location(bot, update):
     resp = urllib2.urlopen(req)
     content = resp.read()
     logging.info("New position set")
+
+
     
 
 def error(bot, update, error):
