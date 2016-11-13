@@ -3,7 +3,7 @@
 #
 
 from peewee import *
-from datetime import datetime
+from datetime import datetime, timedelta
 
 db = SqliteDatabase('users.db')
 
@@ -77,7 +77,7 @@ def garbage_collect():
     c = Encounter.select().where(Encounter.expires < datetime.now()).count()
     t = Encounter.select().count()
 
-    query = Encounter.delete().where(Encounter.expires < datetime.now())
+    query = Encounter.delete().where(Encounter.expires < (datetime.now()-timedelta(hours = 1)))
     query.execute()
     return c, t           
 
