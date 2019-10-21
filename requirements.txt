@@ -3,5 +3,5 @@ future==0.15.2
 peewee==2.8.3
 python-telegram-bot==5.1.0
 urllib3==1.17
-Flask==0.11.1
+Flask==1.0
 geopy==1.11.0
